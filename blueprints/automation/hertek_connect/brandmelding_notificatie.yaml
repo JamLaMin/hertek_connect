@@ -1,0 +1,26 @@
+blueprint:
+  name: Hertek Connect - Brandmelding notificatie
+  description: Stuur een notificatie wanneer brandmelding actief wordt.
+  domain: automation
+  input:
+    fire_entity:
+      name: Brandmelding entity
+      selector:
+        entity:
+          domain: binary_sensor
+    notify_service:
+      name: Notify service
+      selector:
+        text:
+
+mode: single
+
+trigger:
+  - platform: state
+    entity_id: !input fire_entity
+    to: "on"
+
+action:
+  - service: !input notify_service
+    data:
+      message: "Hertek Connect: Brandmelding actief."

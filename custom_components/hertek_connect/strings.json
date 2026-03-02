@@ -1,0 +1,39 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Hertek Connect",
+        "description": "Vul je Hertek Connect gegevens in.",
+        "data": {
+          "base_url": "API basis URL",
+          "username": "Gebruikersnaam",
+          "password": "Wachtwoord"
+        }
+      },
+      "pick_installation": {
+        "title": "Kies installatie",
+        "description": "Kies de Hertek installatie die je wilt toevoegen.",
+        "data": {
+          "installation_id": "Installatie",
+          "scan_interval": "Ververs-interval in seconden"
+        }
+      }
+    },
+    "error": {
+      "auth_failed": "Inloggen lukt niet."
+    },
+    "abort": {
+      "no_installations": "Geen installaties gevonden voor dit account."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opties",
+        "data": {
+          "scan_interval": "Ververs-interval in seconden"
+        }
+      }
+    }
+  }
+}

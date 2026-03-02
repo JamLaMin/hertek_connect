@@ -1,0 +1,28 @@
+blueprint:
+  name: Hertek Connect - Offline notificatie
+  description: Stuur een notificatie wanneer de verbinding offline wordt.
+  domain: automation
+  input:
+    status_entity:
+      name: Verbinding entity
+      selector:
+        entity:
+          domain: sensor
+    notify_service:
+      name: Notify service
+      selector:
+        text:
+
+mode: single
+
+trigger:
+  - platform: state
+    entity_id: !input status_entity
+    to: "Offline"
+    for:
+      minutes: 2
+
+action:
+  - service: !input notify_service
+    data:
+      message: "Hertek Connect: Verbinding is offline."

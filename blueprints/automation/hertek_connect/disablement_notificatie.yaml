@@ -1,0 +1,31 @@
+blueprint:
+  name: Hertek Connect - Uitgeschakeld notificatie
+  description: Stuur een notificatie wanneer een uitschakeling (disablement) actief wordt.
+  domain: automation
+  input:
+    disable_entity:
+      name: Uitgeschakeld entity
+      selector:
+        entity:
+          domain: binary_sensor
+    last_alert_entity:
+      name: Laatste melding entity
+      selector:
+        entity:
+          domain: sensor
+    notify_service:
+      name: Notify service
+      selector:
+        text:
+
+mode: single
+
+trigger:
+  - platform: state
+    entity_id: !input disable_entity
+    to: "on"
+
+action:
+  - service: !input notify_service
+    data:
+      message: "Hertek Connect: Uitschakeling actief. {{ states(!input last_alert_entity) }}"

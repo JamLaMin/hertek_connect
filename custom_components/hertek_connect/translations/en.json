@@ -1,0 +1,39 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Hertek Connect",
+        "description": "Enter your Hertek Connect credentials.",
+        "data": {
+          "base_url": "API base URL",
+          "username": "Username",
+          "password": "Password"
+        }
+      },
+      "pick_installation": {
+        "title": "Select installation",
+        "description": "Select the installation to add.",
+        "data": {
+          "installation_id": "Installation",
+          "scan_interval": "Update interval in seconds"
+        }
+      }
+    },
+    "error": {
+      "auth_failed": "Authentication failed."
+    },
+    "abort": {
+      "no_installations": "No installations found for this account."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Options",
+        "data": {
+          "scan_interval": "Update interval in seconds"
+        }
+      }
+    }
+  }
+}

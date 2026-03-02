@@ -1,0 +1,14 @@
+{
+  "domain": "hertek_connect",
+  "name": "Hertek Connect",
+  "version": "1.1.0",
+  "documentation": "https://api.hertekconnect.nl/api-docs/swagger-ui.html",
+  "issue_tracker": "https://github.com/yourname/hertek_connect/issues",
+  "requirements": [],
+  "codeowners": [],
+  "config_flow": true,
+  "iot_class": "cloud_polling",
+  "loggers": [
+    "custom_components.hertek_connect"
+  ]
+}
