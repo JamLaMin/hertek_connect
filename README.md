@@ -1,3 +1,6 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/JamLaMin/hertek_connect/main/logo.png" width="200">
+</p>
 # Hertek Connect (Home Assistant)
 
 Home Assistant custom integration for reading installation status and active alerts from **Hertek Connect** (Penta).
