@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from urllib.parse import urlparse
+
 import voluptuous as vol
 
 from homeassistant import config_entries
@@ -15,6 +17,8 @@ from .const import (
     CONF_INSTALLATION_ID,
     CONF_SCAN_INTERVAL,
     DEFAULT_BASE_URL,
+    MAX_SCAN_INTERVAL_SECONDS,
+    MIN_SCAN_INTERVAL_SECONDS,
     DEFAULT_SCAN_INTERVAL_SECONDS,
 )
 
@@ -42,6 +46,20 @@ class HertekConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._base_url = user_input[CONF_BASE_URL].rstrip("/")
         self._username = user_input[CONF_USERNAME]
         self._password = user_input[CONF_PASSWORD]
+
+        parsed = urlparse(self._base_url)
+        if parsed.scheme != "https" or not parsed.netloc:
+            return self.async_show_form(
+                step_id="user",
+                data_schema=vol.Schema(
+                    {
+                        vol.Required(CONF_BASE_URL, default=self._base_url): str,
+                        vol.Required(CONF_USERNAME, default=self._username): str,
+                        vol.Required(CONF_PASSWORD): str,
+                    }
+                ),
+                errors={"base": "invalid_base_url"},
+            )
 
         try:
             api = HertekApi(self._base_url, self._username, self._password)
@@ -77,7 +95,10 @@ class HertekConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             schema = vol.Schema(
                 {
                     vol.Required(CONF_INSTALLATION_ID): vol.In(options),
-                    vol.Required(CONF_SCAN_INTERVAL, default=DEFAULT_SCAN_INTERVAL_SECONDS): int,
+                    vol.Required(
+                        CONF_SCAN_INTERVAL,
+                        default=DEFAULT_SCAN_INTERVAL_SECONDS,
+                    ): vol.All(vol.Coerce(int), vol.Range(min=MIN_SCAN_INTERVAL_SECONDS, max=MAX_SCAN_INTERVAL_SECONDS)),
                 }
             )
             return self.async_show_form(step_id="pick_installation", data_schema=schema)
@@ -109,17 +130,25 @@ class HertekOptionsFlowHandler(config_entries.OptionsFlow):
         self.config_entry = config_entry
 
     async def async_step_init(self, user_input=None):
-        current = int(self.config_entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL_SECONDS))
+        current = int(
+            self.config_entry.options.get(
+                CONF_SCAN_INTERVAL,
+                self.config_entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL_SECONDS),
+            )
+        )
 
         if user_input is None:
             schema = vol.Schema(
                 {
-                    vol.Required(CONF_SCAN_INTERVAL, default=current): int,
+                    vol.Required(
+                        CONF_SCAN_INTERVAL,
+                        default=current,
+                    ): vol.All(vol.Coerce(int), vol.Range(min=MIN_SCAN_INTERVAL_SECONDS, max=MAX_SCAN_INTERVAL_SECONDS)),
                 }
             )
             return self.async_show_form(step_id="init", data_schema=schema)
 
-        new_data = dict(self.config_entry.data)
-        new_data[CONF_SCAN_INTERVAL] = int(user_input[CONF_SCAN_INTERVAL])
-        self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
-        return self.async_create_entry(title="", data={})
+        return self.async_create_entry(
+            title="",
+            data={CONF_SCAN_INTERVAL: int(user_input[CONF_SCAN_INTERVAL])},
+        )
