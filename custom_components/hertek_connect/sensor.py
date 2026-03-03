@@ -44,6 +44,15 @@ async def async_setup_entry(
     )
 
 
+
+
+    # Dynamische element-sensors (melders / sirenes / modules)
+    elements = getattr(coordinator.data, 'elements', None) or {}
+    element_entities = []
+    for element in elements.values():
+        element_entities.append(HertekElementStatusSensor(coordinator, entry, installation_id, installation_name, element))
+    if element_entities:
+        async_add_entities(element_entities)
 def _zone_lookup(zones: list[dict], zone_id: int | None) -> dict | None:
     if zone_id is None:
         return None
@@ -54,6 +63,50 @@ def _has_category(alerts: list[dict], category: str) -> bool:
     c = category.upper()
     return any(upper(a.get("statusCategory")) == c for a in alerts)
 
+
+
+class HertekElementStatusSensor(HertekEntityBase, SensorEntity):
+    def __init__(self, coordinator, entry, installation_id: int, installation_name: str, element: dict) -> None:
+        super().__init__(coordinator, entry, installation_id, installation_name)
+        self.element = element
+        self.element_id = int(element.get("id"))
+        self._attr_unique_id = f"{installation_id}_element_{self.element_id}_status"
+
+        # Naam zo uniek mogelijk maken (zone + type + naam)
+        zone_id = element.get("zoneId")
+        zone_txt = ""
+        z = _zone_lookup(self.coordinator.data.zones or [], zone_id)
+        if z and z.get("number") is not None:
+            zone_txt = f"Zone {z.get('number')}"
+            if z.get("name"):
+                zone_txt += f" {z.get('name')}"
+        elif zone_id is not None:
+            zone_txt = f"Zone {zone_id}"
+
+        device_type = element.get("deviceType") or ""
+        name = element.get("name") or f"Element {self.element_id}"
+
+        parts = [p for p in [zone_txt, device_type, name] if p]
+        self._attr_name = " ".join(parts) + " status"
+
+    @property
+    def native_value(self):
+        alerts = self.coordinator.data.alerts or []
+        # Alerts bevatten alleen afwijkingen; alles wat niet voorkomt is normaal
+        for a in alerts:
+            if int(a.get("id", -1)) == self.element_id:
+                return a.get("statusCategory") or "UNKNOWN"
+        return "NORMAL"
+
+    @property
+    def extra_state_attributes(self):
+        # Handig voor diagnose en UI
+        attrs = dict(self.element)
+        alerts = self.coordinator.data.alerts or []
+        match = next((a for a in alerts if int(a.get("id", -1)) == self.element_id), None)
+        if match:
+            attrs["alert"] = match
+        return attrs
 
 class HertekHoofdstatusSensor(HertekEntityBase, SensorEntity):
     _attr_name = "Hoofdstatus"

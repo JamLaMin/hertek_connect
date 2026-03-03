@@ -5,7 +5,7 @@ from typing import Any
 
 import aiohttp
 
-from .const import HTTP_TIMEOUT_SECONDS, PATH_ALERTS, PATH_INSTALLATIONS, PATH_REQUEST_TOKEN, PATH_ZONES
+from .const import HTTP_TIMEOUT_SECONDS, PATH_ALERTS, PATH_ELEMENTS, PATH_INSTALLATIONS, PATH_REQUEST_TOKEN, PATH_ZONES
 from .helpers import parse_dt
 
 
@@ -77,4 +77,8 @@ class HertekApi:
 
     async def get_alerts(self, session: aiohttp.ClientSession, installation_id: int) -> list[dict]:
         path = PATH_ALERTS.format(installationId=installation_id)
+        return await self._get_json(session, self._url(path)) or []
+
+    async def get_elements(self, session: aiohttp.ClientSession, installation_id: int, zone_id: int) -> list[dict]:
+        path = PATH_ELEMENTS.format(installationId=installation_id, zoneId=zone_id)
         return await self._get_json(session, self._url(path)) or []

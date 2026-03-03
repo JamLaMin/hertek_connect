@@ -18,6 +18,7 @@ PATH_REQUEST_TOKEN = "/api/v1/auth/request_token"
 PATH_INSTALLATIONS = "/api/v1/installations"
 PATH_ZONES = "/api/v1/installations/{installationId}/zones"
 PATH_ALERTS = "/api/v1/installations/{installationId}/alerts"
+PATH_ELEMENTS = "/api/v1/installations/{installationId}/zones/{zoneId}/elements"
 
 # Service
 SERVICE_REFRESH = "refresh"

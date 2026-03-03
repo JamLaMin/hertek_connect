@@ -17,6 +17,7 @@ class HertekData:
     installation: dict[str, Any]
     zones: list[dict[str, Any]]
     alerts: list[dict[str, Any]]
+    elements: dict[int, dict[str, Any]]
 
 
 class HertekCoordinator(DataUpdateCoordinator[HertekData]):
@@ -34,6 +35,9 @@ class HertekCoordinator(DataUpdateCoordinator[HertekData]):
 
         self._base_interval = max(10, int(base_scan_interval_seconds))
         self._failure_count = 0
+
+        self._elements_cache: dict[int, dict[str, Any]] = {}
+        self._elements_cache_updated_at: datetime | None = None
 
         super().__init__(
             hass,
@@ -106,18 +110,80 @@ class HertekCoordinator(DataUpdateCoordinator[HertekData]):
             try:
                 zones = await self.api.get_zones(self.session, self.installation_id)
                 alerts = await self.api.get_alerts(self.session, self.installation_id)
+
+# Element-catalogus (melders / sirenes / modules)
+# Deze lijst verandert zelden, dus we verversen hem beperkt om de API te ontzien.
+now = datetime.now(timezone.utc)
+refresh_needed = (
+    not self._elements_cache
+    or self._elements_cache_updated_at is None
+    or (now - self._elements_cache_updated_at) > timedelta(minutes=10)
+)
+
+if refresh_needed:
+    elements_catalog: dict[int, dict[str, Any]] = {}
+    for z in zones or []:
+        zone_id = z.get("id")
+        if not zone_id:
+            continue
+        try:
+            els = await self.api.get_elements(self.session, self.installation_id, int(zone_id))
+            for e in els or []:
+                eid = e.get("id")
+                if eid is not None:
+                    elements_catalog[int(eid)] = e
+        except Exception:
+            # Als een zone faalt, gaan we door met de rest.
+            continue
+
+    if elements_catalog:
+        self._elements_cache = elements_catalog
+        self._elements_cache_updated_at = now
             except PermissionError:
                 await self.api.request_token(self.session)
                 zones = await self.api.get_zones(self.session, self.installation_id)
                 alerts = await self.api.get_alerts(self.session, self.installation_id)
 
+# Element-catalogus (melders / sirenes / modules)
+# Deze lijst verandert zelden, dus we verversen hem beperkt om de API te ontzien.
+now = datetime.now(timezone.utc)
+refresh_needed = (
+    not self._elements_cache
+    or self._elements_cache_updated_at is None
+    or (now - self._elements_cache_updated_at) > timedelta(minutes=10)
+)
+
+if refresh_needed:
+    elements_catalog: dict[int, dict[str, Any]] = {}
+    for z in zones or []:
+        zone_id = z.get("id")
+        if not zone_id:
+            continue
+        try:
+            els = await self.api.get_elements(self.session, self.installation_id, int(zone_id))
+            for e in els or []:
+                eid = e.get("id")
+                if eid is not None:
+                    elements_catalog[int(eid)] = e
+        except Exception:
+            # Als een zone faalt, gaan we door met de rest.
+            continue
+
+    if elements_catalog:
+        self._elements_cache = elements_catalog
+        self._elements_cache_updated_at = now
+
             self._failure_count = 0
+
+        self._elements_cache: dict[int, dict[str, Any]] = {}
+        self._elements_cache_updated_at: datetime | None = None
             self._adapt_interval_success(installation, alerts or [])
 
             return HertekData(
                 installation=installation,
                 zones=zones or [],
                 alerts=alerts or [],
+                elements=self._elements_cache,
             )
 
         except UpdateFailed:
