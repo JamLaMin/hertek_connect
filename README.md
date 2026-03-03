@@ -20,6 +20,7 @@ Home Assistant custom integration for reading installation status and active ale
   - Actieve meldingen (aantal)
   - Laatste melding (leesbaar, NL, inclusief Zone)
   - Zone status per zone (één sensor per zone)
+  - Device status per device (rookmelders, handmelders, signaalgevers, etc.)
   - Laatste check-in (timestamp, diagnostisch)
   - Installatie status (raw, diagnostisch)
 - Binary sensors (NL):
