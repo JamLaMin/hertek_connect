@@ -42,6 +42,18 @@ async def async_setup_entry(
             )
         )
 
+    device_entities = []
+    for device in _collect_devices_from_zones(coordinator.data.zones or []):
+        device_entities.append(
+            HertekDeviceStatusSensor(
+                coordinator,
+                entry,
+                installation_id,
+                installation_name,
+                device,
+            )
+        )
+
     async_add_entities(
         [
             HertekHoofdstatusSensor(coordinator, entry, installation_id, installation_name),
@@ -54,6 +66,7 @@ async def async_setup_entry(
             HertekLaatsteMeldingZoneNummerSensor(coordinator, entry, installation_id, installation_name),
             HertekLaatsteMeldingZoneNaamSensor(coordinator, entry, installation_id, installation_name),
             *zone_entities,
+            *device_entities,
         ],
         update_before_add=True,
     )
