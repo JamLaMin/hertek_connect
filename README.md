@@ -19,6 +19,7 @@ Home Assistant custom integration for reading installation status and active ale
   - Verbinding (Online / Offline / Onbekend)
   - Actieve meldingen (aantal)
   - Laatste melding (leesbaar, NL, inclusief Zone)
+  - Zone status per zone (één sensor per zone)
   - Laatste check-in (timestamp, diagnostisch)
   - Installatie status (raw, diagnostisch)
 - Binary sensors (NL):
