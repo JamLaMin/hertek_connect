@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/JamLaMin/hertek_connect/main/logo.png" width="200">
+  <img src="https://raw.githubusercontent.com/JamLaMin/hertek_connect/main/icon.png" width="200">
 </p>
 # Hertek Connect (Home Assistant)
 
