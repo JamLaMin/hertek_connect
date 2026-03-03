@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.const import STATE_UNKNOWN
@@ -27,21 +27,75 @@ async def async_setup_entry(
     installation_id = int(installation.get("id"))
     installation_name = installation.get("name") or f"Hertek {installation_id}"
 
+    zone_entities = []
+    for zone in coordinator.data.zones or []:
+        zone_id = zone.get("id")
+        if zone_id is None:
+            continue
+        zone_entities.append(
+            HertekZoneStatusSensor(
+                coordinator,
+                entry,
+                installation_id,
+                installation_name,
+                int(zone_id),
+            )
+        )
+
+    device_entities = []
+    for device in _collect_devices_from_zones(coordinator.data.zones or []):
+        device_entities.append(
+            HertekDeviceStatusSensor(
+                coordinator,
+                entry,
+                installation_id,
+                installation_name,
+                device,
+            )
+        )
+
     async_add_entities(
         [
             HertekHoofdstatusSensor(coordinator, entry, installation_id, installation_name),
             HertekVerbindingSensor(coordinator, entry, installation_id, installation_name),
             HertekActieveMeldingenSensor(coordinator, entry, installation_id, installation_name),
             HertekLaatsteMeldingSensor(coordinator, entry, installation_id, installation_name),
-
             # diagnostic
             HertekLaatsteCheckinSensor(coordinator, entry, installation_id, installation_name),
             HertekInstallatieStatusRawSensor(coordinator, entry, installation_id, installation_name),
             HertekLaatsteMeldingZoneNummerSensor(coordinator, entry, installation_id, installation_name),
             HertekLaatsteMeldingZoneNaamSensor(coordinator, entry, installation_id, installation_name),
+            *zone_entities,
+            *device_entities,
         ],
         update_before_add=True,
     )
+
+    known_device_keys: set[str] = set()
+
+    @callback
+    def _async_add_new_device_entities() -> None:
+        new_entities = []
+        for device in _collect_devices_from_zones(coordinator.data.zones or []):
+            key = _device_unique_key(device, device.get("zoneId"))
+            if not key or key in known_device_keys:
+                continue
+            known_device_keys.add(key)
+            new_entities.append(
+                HertekDeviceStatusSensor(
+                    coordinator,
+                    entry,
+                    installation_id,
+                    installation_name,
+                    device,
+                )
+            )
+
+        if new_entities:
+            async_add_entities(new_entities)
+
+    _async_add_new_device_entities()
+    entry.async_on_unload(coordinator.async_add_listener(_async_add_new_device_entities))
 
 
 
@@ -290,3 +344,145 @@ class HertekLaatsteMeldingZoneNaamSensor(HertekEntityBase, SensorEntity):
             return None
         z = _zone_lookup(self.coordinator.data.zones or [], alerts[0].get("zoneId"))
         return z.get("name") if z else None
+
+
+class HertekZoneStatusSensor(HertekEntityBase, SensorEntity):
+    def __init__(
+        self,
+        coordinator,
+        entry,
+        installation_id: int,
+        installation_name: str,
+        zone_id: int,
+    ) -> None:
+        super().__init__(coordinator, entry, installation_id, installation_name)
+        self.zone_id = zone_id
+        self._attr_unique_id = f"{installation_id}_zone_{zone_id}_status"
+
+    @property
+    def _zone(self) -> dict | None:
+        return _zone_lookup(self.coordinator.data.zones or [], self.zone_id)
+
+    @property
+    def name(self):
+        zone = self._zone or {}
+        number = zone.get("number")
+        label = f"Zone {number}" if number is not None else f"Zone {self.zone_id}"
+        if zone.get("name"):
+            label += f" {zone['name']}"
+        return f"{label} status"
+
+    @property
+    def native_value(self):
+        zone_alerts = [a for a in (self.coordinator.data.alerts or []) if a.get("zoneId") == self.zone_id]
+        if not zone_alerts:
+            return "Geen melding"
+        if _has_category(zone_alerts, "FIRE"):
+            return "Brandmelding"
+        if _has_category(zone_alerts, "FAULT"):
+            return "Storing"
+        if _has_category(zone_alerts, "DISABLEMENT"):
+            return "Uitgeschakeld"
+        status = upper(zone_alerts[0].get("statusCategory")) or "UNKNOWN"
+        return STATUSCATEGORY_NL.get(status, "Afwijking")
+
+    @property
+    def extra_state_attributes(self):
+        zone = self._zone or {}
+        zone_alerts = [a for a in (self.coordinator.data.alerts or []) if a.get("zoneId") == self.zone_id]
+        return {
+            "zone_id": self.zone_id,
+            "zone_number": zone.get("number"),
+            "zone_name": zone.get("name"),
+            "active_alerts_count": len(zone_alerts),
+            "active_alerts": zone_alerts,
+        }
+
+
+class HertekDeviceStatusSensor(HertekEntityBase, SensorEntity):
+    def __init__(
+        self,
+        coordinator,
+        entry,
+        installation_id: int,
+        installation_name: str,
+        device: dict,
+    ) -> None:
+        super().__init__(coordinator, entry, installation_id, installation_name)
+        self.device = device
+        key = _device_unique_key(device, device.get("zoneId"))
+        self._attr_unique_id = f"{installation_id}_device_{key}"
+
+    @property
+    def name(self):
+        device_type = DEVICETYPE_NL.get(upper(self.device.get("deviceType")), self.device.get("deviceType") or "Sensor")
+        name = self.device.get("name")
+        if name:
+            return f"{device_type} {name} status"
+
+        loop = self.device.get("loop")
+        address = self.device.get("address")
+        suffix = []
+        if loop is not None:
+            suffix.append(f"Lus {loop}")
+        if address is not None:
+            suffix.append(f"Adres {address}")
+        if suffix:
+            return f"{device_type} {' '.join(suffix)} status"
+        return f"{device_type} status"
+
+    @property
+    def native_value(self):
+        match = self._active_alert
+        if not match:
+            return "Geen melding"
+
+        category = upper(match.get("statusCategory")) or "UNKNOWN"
+        if category == "FIRE":
+            return "Brandmelding"
+        if category == "FAULT":
+            return "Storing"
+        if category == "DISABLEMENT":
+            return "Uitgeschakeld"
+        return STATUSCATEGORY_NL.get(category, "Afwijking")
+
+    @property
+    def _active_alert(self) -> dict | None:
+        alerts = self.coordinator.data.alerts or []
+
+        candidates = [
+            a
+            for a in alerts
+            if a.get("zoneId") == self.device.get("zoneId")
+            and a.get("loop") == self.device.get("loop")
+            and a.get("address") == self.device.get("address")
+        ]
+        if candidates:
+            return candidates[0]
+
+        name = self.device.get("name")
+        if name:
+            by_name = [
+                a
+                for a in alerts
+                if a.get("zoneId") == self.device.get("zoneId")
+                and a.get("name") == name
+                and upper(a.get("deviceType")) == upper(self.device.get("deviceType"))
+            ]
+            if by_name:
+                return by_name[0]
+
+        return None
+
+    @property
+    def extra_state_attributes(self):
+        return {
+            "zone_id": self.device.get("zoneId"),
+            "zone_number": self.device.get("zoneNumber"),
+            "zone_name": self.device.get("zoneName"),
+            "loop": self.device.get("loop"),
+            "address": self.device.get("address"),
+            "device_type": self.device.get("deviceType"),
+            "device_name": self.device.get("name"),
+            "active_alert": self._active_alert,
+        }
