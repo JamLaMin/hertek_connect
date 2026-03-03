@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.const import STATE_UNKNOWN
-from homeassistant.components.sensor import SensorStateClass
-from homeassistant.components.sensor import SensorDeviceClass
 
 from .const import (
     DOMAIN,
@@ -16,7 +14,7 @@ from .const import (
     DEVICETYPE_NL,
 )
 from .entity_base import HertekEntityBase
-from .helpers import upper
+from .helpers import parse_dt, upper
 
 
 async def async_setup_entry(
@@ -100,6 +98,7 @@ class HertekVerbindingSensor(HertekEntityBase, SensorEntity):
 class HertekActieveMeldingenSensor(HertekEntityBase, SensorEntity):
     _attr_name = "Actieve meldingen"
     _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = "meldingen"
 
     def __init__(self, coordinator, entry, installation_id: int, installation_name: str) -> None:
         super().__init__(coordinator, entry, installation_id, installation_name)
@@ -190,7 +189,7 @@ class HertekLaatsteCheckinSensor(HertekEntityBase, SensorEntity):
         nodes = self.coordinator.data.installation.get("nodes") or []
         if not nodes:
             return None
-        return nodes[0].get("lastCheckinAt")
+        return parse_dt(nodes[0].get("lastCheckinAt"))
 
 
 class HertekInstallatieStatusRawSensor(HertekEntityBase, SensorEntity):

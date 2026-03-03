@@ -5,7 +5,7 @@ from typing import Any
 
 import aiohttp
 
-from .const import PATH_ALERTS, PATH_INSTALLATIONS, PATH_REQUEST_TOKEN, PATH_ZONES
+from .const import HTTP_TIMEOUT_SECONDS, PATH_ALERTS, PATH_INSTALLATIONS, PATH_REQUEST_TOKEN, PATH_ZONES
 from .helpers import parse_dt
 
 
@@ -22,6 +22,7 @@ class HertekApi:
         self.password = password
         self._token: str | None = None
         self._valid_until_utc = None
+        self._timeout = aiohttp.ClientTimeout(total=HTTP_TIMEOUT_SECONDS)
 
     @property
     def token_valid_until_utc(self):
@@ -41,7 +42,7 @@ class HertekApi:
         payload = {"username": self.username, "password": self.password}
         headers = {"Accept": "application/json", "Content-Type": "application/json"}
 
-        async with session.post(url, json=payload, headers=headers, timeout=aiohttp.ClientTimeout(total=20)) as resp:
+        async with session.post(url, json=payload, headers=headers, timeout=self._timeout) as resp:
             text = await resp.text()
             if resp.status >= 400:
                 raise RuntimeError(f"Token request failed HTTP {resp.status}: {text}")
@@ -57,7 +58,7 @@ class HertekApi:
         return HertekToken(token=token, valid_until_utc=valid_until)
 
     async def _get_json(self, session: aiohttp.ClientSession, url: str) -> Any:
-        async with session.get(url, headers=self._auth_headers(), timeout=aiohttp.ClientTimeout(total=20)) as resp:
+        async with session.get(url, headers=self._auth_headers(), timeout=self._timeout) as resp:
             if resp.status == 401:
                 raise PermissionError("Unauthorized (401)")
             text = await resp.text()

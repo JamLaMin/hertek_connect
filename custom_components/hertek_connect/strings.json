@@ -20,7 +20,8 @@
       }
     },
     "error": {
-      "auth_failed": "Inloggen lukt niet."
+      "auth_failed": "Inloggen lukt niet.",
+      "invalid_base_url": "Gebruik een geldige https URL."
     },
     "abort": {
       "no_installations": "Geen installaties gevonden voor dit account."
