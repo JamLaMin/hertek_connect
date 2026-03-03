@@ -27,6 +27,21 @@ async def async_setup_entry(
     installation_id = int(installation.get("id"))
     installation_name = installation.get("name") or f"Hertek {installation_id}"
 
+    zone_entities = []
+    for zone in coordinator.data.zones or []:
+        zone_id = zone.get("id")
+        if zone_id is None:
+            continue
+        zone_entities.append(
+            HertekZoneStatusSensor(
+                coordinator,
+                entry,
+                installation_id,
+                installation_name,
+                int(zone_id),
+            )
+        )
+
     async_add_entities(
         [
             HertekHoofdstatusSensor(coordinator, entry, installation_id, installation_name),
@@ -39,6 +54,7 @@ async def async_setup_entry(
             HertekInstallatieStatusRawSensor(coordinator, entry, installation_id, installation_name),
             HertekLaatsteMeldingZoneNummerSensor(coordinator, entry, installation_id, installation_name),
             HertekLaatsteMeldingZoneNaamSensor(coordinator, entry, installation_id, installation_name),
+            *zone_entities,
         ],
         update_before_add=True,
     )
@@ -237,3 +253,56 @@ class HertekLaatsteMeldingZoneNaamSensor(HertekEntityBase, SensorEntity):
             return None
         z = _zone_lookup(self.coordinator.data.zones or [], alerts[0].get("zoneId"))
         return z.get("name") if z else None
+
+
+class HertekZoneStatusSensor(HertekEntityBase, SensorEntity):
+    def __init__(
+        self,
+        coordinator,
+        entry,
+        installation_id: int,
+        installation_name: str,
+        zone_id: int,
+    ) -> None:
+        super().__init__(coordinator, entry, installation_id, installation_name)
+        self.zone_id = zone_id
+        self._attr_unique_id = f"{installation_id}_zone_{zone_id}_status"
+
+    @property
+    def _zone(self) -> dict | None:
+        return _zone_lookup(self.coordinator.data.zones or [], self.zone_id)
+
+    @property
+    def name(self):
+        zone = self._zone or {}
+        number = zone.get("number")
+        label = f"Zone {number}" if number is not None else f"Zone {self.zone_id}"
+        if zone.get("name"):
+            label += f" {zone['name']}"
+        return f"{label} status"
+
+    @property
+    def native_value(self):
+        zone_alerts = [a for a in (self.coordinator.data.alerts or []) if a.get("zoneId") == self.zone_id]
+        if not zone_alerts:
+            return "Geen melding"
+        if _has_category(zone_alerts, "FIRE"):
+            return "Brandmelding"
+        if _has_category(zone_alerts, "FAULT"):
+            return "Storing"
+        if _has_category(zone_alerts, "DISABLEMENT"):
+            return "Uitgeschakeld"
+        status = upper(zone_alerts[0].get("statusCategory")) or "UNKNOWN"
+        return STATUSCATEGORY_NL.get(status, "Afwijking")
+
+    @property
+    def extra_state_attributes(self):
+        zone = self._zone or {}
+        zone_alerts = [a for a in (self.coordinator.data.alerts or []) if a.get("zoneId") == self.zone_id]
+        return {
+            "zone_id": self.zone_id,
+            "zone_number": zone.get("number"),
+            "zone_name": zone.get("name"),
+            "active_alerts_count": len(zone_alerts),
+            "active_alerts": zone_alerts,
+        }
