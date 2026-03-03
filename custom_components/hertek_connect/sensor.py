@@ -98,6 +98,15 @@ async def async_setup_entry(
     entry.async_on_unload(coordinator.async_add_listener(_async_add_new_device_entities))
 
 
+
+
+    # Dynamische element-sensors (melders / sirenes / modules)
+    elements = getattr(coordinator.data, 'elements', None) or {}
+    element_entities = []
+    for element in elements.values():
+        element_entities.append(HertekElementStatusSensor(coordinator, entry, installation_id, installation_name, element))
+    if element_entities:
+        async_add_entities(element_entities)
 def _zone_lookup(zones: list[dict], zone_id: int | None) -> dict | None:
     if zone_id is None:
         return None
@@ -109,64 +118,49 @@ def _has_category(alerts: list[dict], category: str) -> bool:
     return any(upper(a.get("statusCategory")) == c for a in alerts)
 
 
-def _looks_like_device(item: dict) -> bool:
-    return any(
-        item.get(key) is not None
-        for key in ("deviceType", "address", "loop", "deviceId")
-    )
 
+class HertekElementStatusSensor(HertekEntityBase, SensorEntity):
+    def __init__(self, coordinator, entry, installation_id: int, installation_name: str, element: dict) -> None:
+        super().__init__(coordinator, entry, installation_id, installation_name)
+        self.element = element
+        self.element_id = int(element.get("id"))
+        self._attr_unique_id = f"{installation_id}_element_{self.element_id}_status"
 
-def _collect_devices_from_zones(zones: list[dict]) -> list[dict]:
-    devices: list[dict] = []
-    seen: set[str] = set()
+        # Naam zo uniek mogelijk maken (zone + type + naam)
+        zone_id = element.get("zoneId")
+        zone_txt = ""
+        z = _zone_lookup(self.coordinator.data.zones or [], zone_id)
+        if z and z.get("number") is not None:
+            zone_txt = f"Zone {z.get('number')}"
+            if z.get("name"):
+                zone_txt += f" {z.get('name')}"
+        elif zone_id is not None:
+            zone_txt = f"Zone {zone_id}"
 
-    def add_device(device: dict, zone: dict) -> None:
-        unique = _device_unique_key(device, zone.get("id"))
-        if unique in seen:
-            return
-        seen.add(unique)
+        device_type = element.get("deviceType") or ""
+        name = element.get("name") or f"Element {self.element_id}"
 
-        normalized = dict(device)
-        if normalized.get("zoneId") is None:
-            normalized["zoneId"] = zone.get("id")
-        normalized["zoneName"] = zone.get("name")
-        normalized["zoneNumber"] = zone.get("number")
-        devices.append(normalized)
+        parts = [p for p in [zone_txt, device_type, name] if p]
+        self._attr_name = " ".join(parts) + " status"
 
-    def walk(value, zone: dict) -> None:
-        if isinstance(value, list):
-            for item in value:
-                walk(item, zone)
-            return
-        if not isinstance(value, dict):
-            return
+    @property
+    def native_value(self):
+        alerts = self.coordinator.data.alerts or []
+        # Alerts bevatten alleen afwijkingen; alles wat niet voorkomt is normaal
+        for a in alerts:
+            if int(a.get("id", -1)) == self.element_id:
+                return a.get("statusCategory") or "UNKNOWN"
+        return "NORMAL"
 
-        if _looks_like_device(value):
-            add_device(value, zone)
-
-        for nested in value.values():
-            if isinstance(nested, (list, dict)):
-                walk(nested, zone)
-
-    for zone in zones:
-        walk(zone, zone)
-
-    return devices
-
-
-def _device_unique_key(device: dict, fallback_zone_id: int | None = None) -> str:
-    parts = [
-        device.get("id"),
-        device.get("deviceId"),
-        device.get("zoneId") or fallback_zone_id,
-        device.get("loop"),
-        device.get("address"),
-        upper(device.get("deviceType")),
-        device.get("name"),
-    ]
-    raw = "_".join(str(p) for p in parts if p is not None)
-    return "".join(ch if str(ch).isalnum() else "_" for ch in raw).strip("_")
-
+    @property
+    def extra_state_attributes(self):
+        # Handig voor diagnose en UI
+        attrs = dict(self.element)
+        alerts = self.coordinator.data.alerts or []
+        match = next((a for a in alerts if int(a.get("id", -1)) == self.element_id), None)
+        if match:
+            attrs["alert"] = match
+        return attrs
 
 class HertekHoofdstatusSensor(HertekEntityBase, SensorEntity):
     _attr_name = "Hoofdstatus"

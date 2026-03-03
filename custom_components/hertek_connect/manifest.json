@@ -6,6 +6,7 @@
   "documentation": "https://api.hertekconnect.nl/api-docs/swagger-ui.html",
   "integration_type": "service",
   "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/JamLaMin/hertek_connect/issues",
   "loggers": [
     "custom_components.hertek_connect"
   ],
