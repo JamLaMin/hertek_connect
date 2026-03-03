@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.const import STATE_UNKNOWN
@@ -60,7 +60,6 @@ async def async_setup_entry(
             HertekVerbindingSensor(coordinator, entry, installation_id, installation_name),
             HertekActieveMeldingenSensor(coordinator, entry, installation_id, installation_name),
             HertekLaatsteMeldingSensor(coordinator, entry, installation_id, installation_name),
-
             # diagnostic
             HertekLaatsteCheckinSensor(coordinator, entry, installation_id, installation_name),
             HertekInstallatieStatusRawSensor(coordinator, entry, installation_id, installation_name),
@@ -71,6 +70,32 @@ async def async_setup_entry(
         ],
         update_before_add=True,
     )
+
+    known_device_keys: set[str] = set()
+
+    @callback
+    def _async_add_new_device_entities() -> None:
+        new_entities = []
+        for device in _collect_devices_from_zones(coordinator.data.zones or []):
+            key = _device_unique_key(device, device.get("zoneId"))
+            if not key or key in known_device_keys:
+                continue
+            known_device_keys.add(key)
+            new_entities.append(
+                HertekDeviceStatusSensor(
+                    coordinator,
+                    entry,
+                    installation_id,
+                    installation_name,
+                    device,
+                )
+            )
+
+        if new_entities:
+            async_add_entities(new_entities)
+
+    _async_add_new_device_entities()
+    entry.async_on_unload(coordinator.async_add_listener(_async_add_new_device_entities))
 
 
 def _zone_lookup(zones: list[dict], zone_id: int | None) -> dict | None:
@@ -139,7 +164,8 @@ def _device_unique_key(device: dict, fallback_zone_id: int | None = None) -> str
         upper(device.get("deviceType")),
         device.get("name"),
     ]
-    return "|".join(str(p) for p in parts if p is not None)
+    raw = "_".join(str(p) for p in parts if p is not None)
+    return "".join(ch if str(ch).isalnum() else "_" for ch in raw).strip("_")
 
 
 class HertekHoofdstatusSensor(HertekEntityBase, SensorEntity):
